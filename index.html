@@ -1,0 +1,340 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+
+  <title>NET PRAY | Escáner QR</title>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    :root {
+      --oliva: #424B25;
+      --dorado: #B59A50;
+      --claro: #F4F3EB;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--claro);
+      font-family: Arial, sans-serif;
+      color: var(--oliva);
+    }
+
+    .contenedor {
+      max-width: 650px;
+      margin: auto;
+      min-height: 100vh;
+      background: white;
+    }
+
+    header {
+      background: var(--oliva);
+      color: white;
+      text-align: center;
+      padding: 30px 20px;
+    }
+
+    .marca {
+      color: #D5BD78;
+      letter-spacing: 5px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    .business {
+      font-size: 30px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      margin: 8px 0;
+    }
+
+    .tema {
+      color: #D5BD78;
+      font-size: 11px;
+      letter-spacing: 2px;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-top: 30px;
+    }
+
+    main {
+      padding: 22px;
+      text-align: center;
+    }
+
+    button {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 12px;
+    }
+
+    .principal {
+      background: var(--oliva);
+      color: white;
+    }
+
+    .secundario {
+      background: var(--claro);
+      color: var(--oliva);
+    }
+
+    button:disabled {
+      opacity: .5;
+    }
+
+    #lector {
+      width: 100%;
+      margin: 15px 0;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+
+    #mensaje {
+      padding: 14px;
+      font-size: 14px;
+      border-radius: 10px;
+      background: var(--claro);
+      margin: 15px 0;
+    }
+
+    .error {
+      color: #A83232;
+    }
+
+    footer {
+      padding: 25px;
+      text-align: center;
+      font-size: 11px;
+      color: #999;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="contenedor">
+
+  <header>
+    <div class="marca">NET PRAY</div>
+    <div class="business">FOR BUSINESS</div>
+    <div class="tema">
+      TRANSFORMADOS &amp; POSICIONADOS
+    </div>
+
+    <h1>Escáner de acceso</h1>
+    <p>Desayuno para líderes y empresarios</p>
+    <p>20 de noviembre de 2026</p>
+  </header>
+
+  <main>
+
+    <button class="principal"
+            id="btnIniciar"
+            onclick="iniciarCamara()">
+      ▣ Activar cámara
+    </button>
+
+    <div id="lector"></div>
+
+    <div id="mensaje" role="status">
+      Presiona Activar cámara para comenzar.
+    </div>
+
+    <button class="secundario"
+            id="btnDetener"
+            onclick="detenerCamara()"
+            disabled>
+      Cerrar cámara
+    </button>
+
+    <button class="secundario"
+            onclick="volverRecepcion()">
+      Volver a recepción
+    </button>
+
+  </main>
+
+  <footer>
+    NET PRAY FOR BUSINESS · RECEPCIÓN 2026
+  </footer>
+
+</div>
+
+<script>
+
+const URL_RECEPCION =
+  "https://script.google.com/macros/s/AKfycbzr-TP1oOnxtp2rTiEf2J6g5X70jGG5J7RASYcv5xX3rgA9CtLiYJhvaKTZcvnqhInl/exec";
+
+let escaner = null;
+let procesando = false;
+let iniciando = false;
+
+function mensaje(texto, error = false) {
+
+  const elemento = document.getElementById("mensaje");
+
+  elemento.textContent = texto;
+  elemento.className = error ? "error" : "";
+
+}
+
+async function iniciarCamara() {
+
+  if (escaner || iniciando) return;
+
+  iniciando = true;
+  procesando = false;
+
+  document.getElementById("btnIniciar").disabled = true;
+
+  mensaje("Solicitando acceso a la cámara...");
+
+  try {
+
+    if (typeof Html5Qrcode === "undefined") {
+      throw new Error("No se pudo cargar el lector QR.");
+    }
+
+    escaner = new Html5Qrcode("lector");
+
+    await escaner.start(
+
+      { facingMode: "environment" },
+
+      {
+        fps: 10,
+        qrbox: { width: 230, height: 230 }
+      },
+
+      procesarCodigo,
+
+      () => {}
+
+    );
+
+    document.getElementById("btnDetener").disabled = false;
+
+    mensaje("Coloca el código QR frente a la cámara.");
+
+  } catch (error) {
+
+    await detenerCamara();
+
+    mensaje(
+      "Error de cámara: " +
+      (error.message || String(error)),
+      true
+    );
+
+  } finally {
+
+    iniciando = false;
+
+  }
+
+}
+
+async function procesarCodigo(texto) {
+
+  if (procesando || iniciando) return;
+
+  let token = "";
+
+  try {
+
+    const url = new URL(texto.trim());
+    const esperada = new URL(URL_RECEPCION);
+
+    if (
+      url.origin !== esperada.origin ||
+      url.pathname !== esperada.pathname
+    ) {
+      mensaje("Este QR no corresponde a NET PRAY.", true);
+      return;
+    }
+
+    token = url.searchParams.get("t") || "";
+
+  } catch (error) {
+
+    token = texto.trim();
+
+  }
+
+  if (!/^[a-f0-9]{32}$/i.test(token)) {
+
+    mensaje("Código QR no válido.", true);
+    return;
+
+  }
+
+  procesando = true;
+
+  mensaje("Código leído. Consultando invitado...");
+
+  await detenerCamara();
+
+  window.location.href =
+    URL_RECEPCION + "?t=" + encodeURIComponent(token);
+
+}
+
+async function detenerCamara() {
+
+  if (escaner) {
+
+    try {
+
+      if (escaner.isScanning) {
+        await escaner.stop();
+      }
+
+      escaner.clear();
+
+    } catch (error) {
+
+      console.error(error);
+
+    }
+
+    escaner = null;
+
+  }
+
+  document.getElementById("btnIniciar").disabled = false;
+  document.getElementById("btnDetener").disabled = true;
+
+}
+
+async function volverRecepcion() {
+
+  if (iniciando) return;
+
+  procesando = true;
+
+  await detenerCamara();
+
+  window.location.href = URL_RECEPCION;
+
+}
+
+</script>
+
+</body>
+</html>
