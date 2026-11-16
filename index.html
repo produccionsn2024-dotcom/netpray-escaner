@@ -185,6 +185,86 @@ let escaner = null;
 let procesando = false;
 let iniciando = false;
 
+
+/*************************************************
+ COMUNICACIÓN CON RECEPCIÓN AUTENTICADA
+*************************************************/
+
+const modoSesion =
+  new URLSearchParams(window.location.search)
+    .get("modo") === "sesion";
+
+let origenRecepcion = null;
+let canalRecepcion = null;
+
+window.addEventListener("message", function(evento) {
+
+  if (
+    !modoSesion ||
+    !window.opener ||
+    evento.source !== window.opener
+  ) {
+    return;
+  }
+
+  let origen;
+
+  try {
+    origen = new URL(evento.origin);
+  } catch (error) {
+    return;
+  }
+
+  if (
+    origen.protocol !== "https:" ||
+    !(
+      origen.hostname === "script.google.com" ||
+      origen.hostname.endsWith(
+        ".googleusercontent.com"
+      )
+    )
+  ) {
+    return;
+  }
+
+  const datos = evento.data;
+
+  if (
+    !datos ||
+    datos.tipo !== "NETPRAY_INICIAR_CANAL" ||
+    typeof datos.canal !== "string" ||
+    !/^[a-f0-9]{32}$/.test(datos.canal)
+  ) {
+    return;
+  }
+
+  if (canalRecepcion) return;
+
+  origenRecepcion = evento.origin;
+  canalRecepcion = datos.canal;
+
+  mensaje(
+    "Recepción conectada. Presiona Activar cámara."
+  );
+
+});
+
+if (modoSesion && window.opener) {
+
+  window.opener.postMessage(
+    {
+      tipo: "NETPRAY_ESCANER_LISTO"
+    },
+    "*"
+  );
+
+}
+
+
+/*************************************************
+ MENSAJES DEL ESCÁNER
+*************************************************/
+
 function mensaje(texto, error = false) {
 
   const elemento = document.getElementById("mensaje");
@@ -194,9 +274,29 @@ function mensaje(texto, error = false) {
 
 }
 
+
+/*************************************************
+ ACTIVACIÓN DE CÁMARA
+*************************************************/
+
 async function iniciarCamara() {
 
   if (escaner || iniciando) return;
+
+  if (
+    modoSesion &&
+    (!window.opener || !canalRecepcion)
+  ) {
+
+    mensaje(
+      "No se ha conectado con recepción. " +
+      "Cierra esta ventana y vuelve a abrir el escáner.",
+      true
+    );
+
+    return;
+
+  }
 
   iniciando = true;
   procesando = false;
@@ -250,6 +350,11 @@ async function iniciarCamara() {
 
 }
 
+
+/*************************************************
+ PROCESAMIENTO DEL CÓDIGO QR
+*************************************************/
+
 async function procesarCodigo(texto) {
 
   if (procesando || iniciando) return;
@@ -265,8 +370,14 @@ async function procesarCodigo(texto) {
       url.origin !== esperada.origin ||
       url.pathname !== esperada.pathname
     ) {
-      mensaje("Este QR no corresponde a NET PRAY.", true);
+
+      mensaje(
+        "Este QR no corresponde a NET PRAY.",
+        true
+      );
+
       return;
+
     }
 
     token = url.searchParams.get("t") || "";
@@ -290,10 +401,50 @@ async function procesarCodigo(texto) {
 
   await detenerCamara();
 
-  window.location.href =
-    URL_RECEPCION + "?t=" + encodeURIComponent(token);
+  if (modoSesion) {
+
+    if (
+      !window.opener ||
+      !origenRecepcion ||
+      !canalRecepcion
+    ) {
+
+      mensaje(
+        "No se pudo conectar con recepción. " +
+        "Cierra esta ventana y vuelve a abrir el escáner.",
+        true
+      );
+
+      procesando = false;
+      return;
+
+    }
+
+    window.opener.postMessage(
+      {
+        tipo: "NETPRAY_QR",
+        canal: canalRecepcion,
+        token: token
+      },
+      origenRecepcion
+    );
+
+    mensaje("Código enviado a recepción.");
+
+  } else {
+
+    window.location.href =
+      URL_RECEPCION + "?t=" +
+      encodeURIComponent(token);
+
+  }
 
 }
+
+
+/*************************************************
+ CERRAR CÁMARA
+*************************************************/
 
 async function detenerCamara() {
 
@@ -322,6 +473,11 @@ async function detenerCamara() {
 
 }
 
+
+/*************************************************
+ VOLVER A RECEPCIÓN
+*************************************************/
+
 async function volverRecepcion() {
 
   if (iniciando) return;
@@ -330,11 +486,38 @@ async function volverRecepcion() {
 
   await detenerCamara();
 
-  window.location.href = URL_RECEPCION;
+  if (modoSesion) {
+
+    if (
+      window.opener &&
+      origenRecepcion &&
+      canalRecepcion
+    ) {
+
+      window.opener.postMessage(
+        {
+          tipo: "NETPRAY_VOLVER",
+          canal: canalRecepcion
+        },
+        origenRecepcion
+      );
+
+    } else {
+
+      window.close();
+
+    }
+
+  } else {
+
+    window.location.href = URL_RECEPCION;
+
+  }
 
 }
 
 </script>
+
 
 </body>
 </html>
