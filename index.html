@@ -311,11 +311,26 @@ async function iniciarCamara() {
       throw new Error("No se pudo cargar el lector QR.");
     }
 
-    escaner = new Html5Qrcode("lector");
+    
+const camaras = await Html5Qrcode.getCameras();
 
-    await escaner.start(
+if (!camaras || camaras.length === 0) {
+  throw new Error("No se encontraron cámaras disponibles.");
+}
 
-      { facingMode: { ideal: "environment" } },
+const camaraSeleccionada =
+  camaras.find(camara =>
+    /back|rear|environment|trasera|posterior/i.test(
+      camara.label
+    )
+  ) || camaras[0];
+
+escaner = new Html5Qrcode("lector");
+
+await escaner.start(
+
+  camaraSeleccionada.id,
+
 
       {
         fps: 10,
