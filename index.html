@@ -315,7 +315,7 @@ async function iniciarCamara() {
 
     await escaner.start(
 
-      { facingMode: "environment" },
+      { facingMode: { ideal: "environment" } },
 
       {
         fps: 10,
